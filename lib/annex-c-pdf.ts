@@ -1,7 +1,7 @@
 import PDFDocument from "pdfkit";
 import { existsSync } from "node:fs";
 import { formatWorkDate, type ReportingPeriod } from "@/lib/dates";
-import { outputAsBulletedList } from "@/lib/report-format";
+import { isMeetingReportItem, outputAsBulletedList, splitReportItems } from "@/lib/report-format";
 import { humanizeEnum } from "@/lib/utils";
 
 type ReportUser = {
@@ -20,6 +20,8 @@ type ReportEntry = {
   output: string;
   showStatus: boolean;
 };
+
+type ReportRow = ReportEntry & { displayStatus: boolean };
 
 const PAGE_HEIGHT = 595.28;
 const LEFT = 52;
@@ -88,16 +90,41 @@ function drawColumnHeader(doc: PDFKit.PDFDocument, y: number) {
   return y + height;
 }
 
-function rowHeight(doc: PDFKit.PDFDocument, entry: ReportEntry) {
-  if (!entry.showStatus && entry.target === "Work From Home") return 10;
-  const formattedOutput = outputAsBulletedList(entry.output);
-  const targetHeight = doc.font(BOLD_FONT).fontSize(FONT_SIZE).heightOfString(entry.target, { width: COLUMNS[1] - 5 });
-  const outputHeight = doc.font(REGULAR_FONT).fontSize(FONT_SIZE).heightOfString(formattedOutput, { width: COLUMNS[2] - 5, lineGap: 0.5 });
-  const statusHeight = entry.showStatus ? doc.font(BOLD_FONT).heightOfString(`Status: ${humanizeEnum(entry.status)} ${entry.completionPercentage}%`, { width: COLUMNS[2] - 5 }) : 0;
-  return Math.max(48, targetHeight + 7, outputHeight + statusHeight + 9);
+function splitEntryRows(entry: ReportEntry): ReportRow[] {
+  if (!entry.showStatus && entry.target === "Work From Home") return [{ ...entry, displayStatus: false }];
+  const targets = splitReportItems(entry.target);
+  const outputs = splitReportItems(entry.output);
+  const count = Math.max(1, targets.length, outputs.length);
+  return Array.from({ length: count }, (_, index) => {
+    const target = targets[index] ?? "";
+    const output = outputs[index] ?? "";
+    return {
+      ...entry,
+      target,
+      output,
+      displayStatus: entry.showStatus && !isMeetingReportItem(`${target} ${output}`),
+    };
+  });
 }
 
-function drawEntryRow(doc: PDFKit.PDFDocument, entry: ReportEntry, y: number, height: number) {
+function rowHeight(doc: PDFKit.PDFDocument, entry: ReportRow) {
+  if (!entry.showStatus && entry.target === "Work From Home") return 10;
+  const formattedOutput = outputAsBulletedList(entry.output);
+  const targetHeight = doc.font(BOLD_FONT).fontSize(FONT_SIZE).heightOfString(entry.target, { width: COLUMNS[1] - 4, lineGap: 0.5 });
+  const outputHeight = doc.font(REGULAR_FONT).fontSize(FONT_SIZE).heightOfString(formattedOutput, { width: COLUMNS[2] - 5, lineGap: 0.5 });
+  const statusHeight = entry.displayStatus ? doc.font(BOLD_FONT).heightOfString(`Status: ${humanizeEnum(entry.status)} ${entry.completionPercentage}%`, { width: COLUMNS[2] - 5 }) : 0;
+  return Math.ceil(Math.max(48, targetHeight + 9, outputHeight + statusHeight + 11));
+}
+
+function drawDateCell(doc: PDFKit.PDFDocument, entry: ReportRow, y: number, height: number) {
+  drawBox(doc, LEFT, y, COLUMNS[0], height);
+  doc.fillColor("#000000").font(REGULAR_FONT).fontSize(FONT_SIZE);
+  const label = formatWorkDate(entry.date);
+  const labelHeight = doc.heightOfString(label, { width: COLUMNS[0] - 4, align: "center" });
+  doc.text(label, LEFT + 2, y + Math.max(3, (height - labelHeight) / 2), { width: COLUMNS[0] - 4, align: "center" });
+}
+
+function drawEntryRow(doc: PDFKit.PDFDocument, entry: ReportRow, y: number, height: number, includeDate = true) {
   if (!entry.showStatus && entry.target === "Work From Home") {
     drawBox(doc, LEFT, y, COLUMNS[0], height);
     drawBox(doc, LEFT + COLUMNS[0], y, COLUMNS[1] + COLUMNS[2], height);
@@ -106,16 +133,17 @@ function drawEntryRow(doc: PDFKit.PDFDocument, entry: ReportEntry, y: number, he
     doc.font(BOLD_FONT).text(entry.target, LEFT + COLUMNS[0] + 2, y + 0.2, { width: COLUMNS[1] + COLUMNS[2] - 4, height: height - 0.4, align: "center", lineBreak: false });
     return;
   }
-  let x = LEFT;
-  COLUMNS.forEach((width) => { drawBox(doc, x, y, width, height); x += width; });
-  doc.fillColor("#000000").font(REGULAR_FONT).fontSize(FONT_SIZE).text(formatWorkDate(entry.date), LEFT + 2, y + 3, { width: COLUMNS[0] - 4, align: "center" });
+  if (includeDate) drawDateCell(doc, entry, y, height);
+  let x = LEFT + COLUMNS[0];
+  COLUMNS.slice(1).forEach((width) => { drawBox(doc, x, y, width, height); x += width; });
+  doc.fillColor("#000000").fontSize(FONT_SIZE);
   doc.font(BOLD_FONT).text(entry.target, LEFT + COLUMNS[0] + 2, y + 3, { width: COLUMNS[1] - 4, lineGap: 0.5, align: entry.showStatus ? "left" : "center" });
   const outputX = LEFT + COLUMNS[0] + COLUMNS[1] + 2;
   const outputY = y + 3;
   const formattedOutput = outputAsBulletedList(entry.output);
   doc.font(REGULAR_FONT).text(formattedOutput, outputX, outputY, { width: COLUMNS[2] - 4, lineGap: 0.5 });
   const outputHeight = doc.heightOfString(formattedOutput, { width: COLUMNS[2] - 4, lineGap: 0.5 });
-  if (entry.showStatus) doc.font(BOLD_FONT).text(`Status: ${humanizeEnum(entry.status)} ${entry.completionPercentage}%`, outputX, outputY + outputHeight + 1, { width: COLUMNS[2] - 4, underline: true });
+  if (entry.displayStatus) doc.font(BOLD_FONT).text(`Status: ${humanizeEnum(entry.status)} ${entry.completionPercentage}%`, outputX, outputY + outputHeight + 1, { width: COLUMNS[2] - 4, underline: true });
 }
 
 function addLandscapePage(doc: PDFKit.PDFDocument, withTableHeader = false) {
@@ -169,11 +197,40 @@ export async function generateAnnexCPdf(user: ReportUser, period: ReportingPerio
     doc.font(REGULAR_FONT).fontSize(FONT_SIZE).text("No accomplishment entries for this reporting period.", LEFT, y + 18, { width: TABLE_WIDTH, align: "center" });
     y += 48;
   } else {
+    const pageCapacity = PAGE_HEIGHT - BOTTOM - 54;
     for (const entry of entries) {
-      const height = rowHeight(doc, entry);
-      if (y + height > PAGE_HEIGHT - BOTTOM) y = addLandscapePage(doc);
-      drawEntryRow(doc, entry, y, height);
-      y += height;
+      const rows = splitEntryRows(entry);
+      const heights = rows.map((row) => rowHeight(doc, row));
+      const groupHeight = heights.reduce((sum, height) => sum + height, 0);
+
+      if (rows.length === 1 && !entry.showStatus && entry.target === "Work From Home") {
+        if (y + heights[0] > PAGE_HEIGHT - BOTTOM) y = addLandscapePage(doc);
+        drawEntryRow(doc, rows[0], y, heights[0]);
+        y += heights[0];
+        continue;
+      }
+
+      if (groupHeight <= pageCapacity && y + groupHeight > PAGE_HEIGHT - BOTTOM) y = addLandscapePage(doc);
+      let rowIndex = 0;
+      while (rowIndex < rows.length) {
+        if (y + heights[rowIndex] > PAGE_HEIGHT - BOTTOM) y = addLandscapePage(doc);
+        const segmentStart = rowIndex;
+        let segmentHeight = 0;
+        while (rowIndex < rows.length && y + segmentHeight + heights[rowIndex] <= PAGE_HEIGHT - BOTTOM) {
+          segmentHeight += heights[rowIndex];
+          rowIndex += 1;
+        }
+        if (rowIndex === segmentStart) {
+          segmentHeight = heights[rowIndex];
+          rowIndex += 1;
+        }
+        drawDateCell(doc, rows[segmentStart], y, segmentHeight);
+        for (let index = segmentStart; index < rowIndex; index += 1) {
+          drawEntryRow(doc, rows[index], y, heights[index], false);
+          y += heights[index];
+        }
+        if (rowIndex < rows.length) y = addLandscapePage(doc);
+      }
     }
   }
   if (y + 96 > PAGE_HEIGHT - BOTTOM) y = addLandscapePage(doc, false);

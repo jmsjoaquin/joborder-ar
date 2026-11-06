@@ -87,7 +87,7 @@ export async function generateServicesCertificationPdf(profile: CertificationPro
   doc.font(REGULAR).fontSize(12).text("This certification is issued to attest that the above-mentioned JO has satisfactorily rendered the services indicated herein and is being submitted to the Human Resource Department for reference in the processing of remuneration covering the payroll period ", LEFT, y, { width: WIDTH, indent: 36, lineGap: 4, continued: true });
   doc.text(`${certificationPeriodLabel(period)}.`, { underline: true, continued: false });
 
-  const signatureY = Math.min(720, Math.max(590, doc.y + 58));
+  const signatureY = Math.min(645, Math.max(515, doc.y + 20));
   doc.font(BOLD).fontSize(12).text((profile.certifyingOfficerName || "CERTIFYING OFFICER").toUpperCase(), LEFT, signatureY, { width: WIDTH, align: "center" });
   const position = profile.certifyingOfficerPosition || "Certifying Officer Position";
   const [firstLine, ...remaining] = position.split(/,\s*/);

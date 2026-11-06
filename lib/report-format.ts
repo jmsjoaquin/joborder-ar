@@ -67,16 +67,18 @@ export function outputHeadingFromTarget(target: string) {
   return trimmed.replace(/^([A-Za-z]+)(\b)/, (_match, verb: string, wordBoundary: string) => `${verbToPastTense(verb)}${wordBoundary}`);
 }
 
-export function outputAsBulletedList(output: string) {
-  return output
+export function splitReportItems(value: string) {
+  return value
     .replace(/\r\n?/g, "\n")
     .split("\n")
-    .map((line) => {
-      const trimmed = line.trim();
-      if (!trimmed) return "";
+    .map((line) => line.trim().replace(/^(?:(?:[-*\u2022\u2023\u25e6\u25aa])|(?:\d+[.)]))\s+/, ""))
+    .filter(Boolean);
+}
 
-      const text = trimmed.replace(/^(?:(?:[-*\u2022\u2023\u25e6\u25aa])|(?:\d+[.)]))\s+/, "");
-      return `\u2022 ${text}`;
-    })
-    .join("\n");
+export function isMeetingReportItem(value: string) {
+  return /\b(?:meetings?|scrum|stand-?up)\b/i.test(value);
+}
+
+export function outputAsBulletedList(output: string) {
+  return splitReportItems(output).map((item) => `\u2022 ${item}`).join("\n");
 }
