@@ -16,10 +16,10 @@ export type CertifiedService = { date: Date; hours: number };
 
 const LETTERHEAD = path.join(process.cwd(), "public/document-assets/philhealth-letterhead.png");
 const ISO_LOGO = path.join(process.cwd(), "public/document-assets/tuv-sud-iso-9001.png");
-const TIMES = "/System/Library/Fonts/Supplemental/Times New Roman.ttf";
-const TIMES_BOLD = "/System/Library/Fonts/Supplemental/Times New Roman Bold.ttf";
-const REGULAR = existsSync(TIMES) ? "TimesNewRoman" : "Times-Roman";
-const BOLD = existsSync(TIMES_BOLD) ? "TimesNewRomanBold" : "Times-Bold";
+const GEORGIA = "/System/Library/Fonts/Supplemental/Georgia.ttf";
+const GEORGIA_BOLD = "/System/Library/Fonts/Supplemental/Georgia Bold.ttf";
+const REGULAR = existsSync(GEORGIA) ? "Georgia" : "Times-Roman";
+const BOLD = existsSync(GEORGIA_BOLD) ? "GeorgiaBold" : "Times-Bold";
 const LEFT = 54;
 const WIDTH = 487;
 
@@ -42,18 +42,24 @@ function box(doc: PDFKit.PDFDocument, x: number, y: number, width: number, heigh
 
 export async function generateServicesCertificationPdf(profile: CertificationProfile, period: ReportingPeriod, services: CertifiedService[]) {
   const doc = new PDFDocument({ autoFirstPage: false, size: "A4", layout: "portrait", margin: 0, info: { Title: `Certification of Services Rendered - ${certificationPeriodLabel(period)}`, Author: profile.fullName } });
-  if (existsSync(TIMES)) doc.registerFont("TimesNewRoman", TIMES);
-  if (existsSync(TIMES_BOLD)) doc.registerFont("TimesNewRomanBold", TIMES_BOLD);
+  if (existsSync(GEORGIA)) doc.registerFont("Georgia", GEORGIA);
+  if (existsSync(GEORGIA_BOLD)) doc.registerFont("GeorgiaBold", GEORGIA_BOLD);
   const chunks: Buffer[] = [];
   doc.on("data", (chunk: Buffer) => chunks.push(chunk));
   const completed = new Promise<Buffer>((resolve, reject) => { doc.on("end", () => resolve(Buffer.concat(chunks))); doc.on("error", reject); });
 
   doc.addPage({ size: "A4", layout: "portrait", margin: 0 });
   doc.image(LETTERHEAD, 45, 32, { width: 540, height: 73 });
-  doc.fillColor("#000").font(BOLD).fontSize(12).text("CERTIFICATION OF SERVICES RENDERED", LEFT, 150, { width: WIDTH, align: "center" });
+  doc.fillColor("#000").font(BOLD).fontSize(14).text("CERTIFICATION OF SERVICES RENDERED", LEFT, 149, { width: WIDTH, align: "center" });
 
-  const opening = `This is to certify ${profile.fullName.toUpperCase()}, ${profile.position} assigned at the ${profile.fullDepartmentName} have rendered services on the following date(s):`;
-  doc.font(REGULAR).fontSize(10.5).text(opening, LEFT, 191, { width: WIDTH, indent: 32, lineGap: 4, align: "left" });
+  doc.fillColor("#000").font(REGULAR).fontSize(12).text("This is to certify ", 90, 192, { continued: true });
+  doc.font(BOLD).text(profile.fullName.toUpperCase(), { continued: true, underline: true });
+  doc.font(REGULAR).text(", ", { continued: true });
+  doc.font(BOLD).text(profile.position, { underline: true });
+  doc.font(REGULAR).text("assigned at the ", LEFT, 213, { continued: true });
+  doc.text(profile.fullDepartmentName, { continued: true, underline: true });
+  doc.font(REGULAR).text(" have rendered services on", { underline: false });
+  doc.text("the following date(s):", LEFT, 233);
 
   const tableWidth = 398;
   const tableLeft = (595.28 - tableWidth) / 2;
@@ -61,23 +67,26 @@ export async function generateServicesCertificationPdf(profile: CertificationPro
   const rowHeight = services.length > 10 ? 20 : 25;
   let y = 272;
   box(doc, tableLeft, y, dateWidth, 28, "#f2f2f2"); box(doc, tableLeft + dateWidth, y, tableWidth - dateWidth, 28, "#f2f2f2");
-  doc.font(BOLD).fontSize(10.5).fillColor("#000").text("Date", tableLeft, y + 8, { width: dateWidth, align: "center" });
+  doc.font(BOLD).fontSize(12).fillColor("#000").text("Date", tableLeft, y + 7, { width: dateWidth, align: "center" });
   doc.text("No. of Hours", tableLeft + dateWidth, y + 8, { width: tableWidth - dateWidth, align: "center" });
   y += 28;
   for (const service of services) {
     box(doc, tableLeft, y, dateWidth, rowHeight); box(doc, tableLeft + dateWidth, y, tableWidth - dateWidth, rowHeight);
-    doc.font(REGULAR).fontSize(services.length > 10 ? 9.5 : 10.5).text(formatDate(service.date), tableLeft, y + (services.length > 10 ? 5 : 7), { width: dateWidth, align: "center" });
+    doc.font(REGULAR).fontSize(services.length > 10 ? 9.5 : 12).text(formatDate(service.date), tableLeft, y + (services.length > 10 ? 5 : 6), { width: dateWidth, align: "center" });
     doc.text(formatHours(service.hours), tableLeft + dateWidth, y + (services.length > 10 ? 5 : 7), { width: tableWidth - dateWidth, align: "center" });
     y += rowHeight;
   }
 
   y += 22;
-  const closing = `This certification is issued to attest that the above-mentioned JO has satisfactorily rendered the services indicated herein and is being submitted to the Human Resource Department for reference in the processing of remuneration covering the payroll period ${certificationPeriodLabel(period)}.`;
-  doc.font(REGULAR).fontSize(10.5).text(closing, LEFT, y, { width: WIDTH, indent: 32, lineGap: 4, align: "left" });
+  doc.font(REGULAR).fontSize(12).text("This certification is issued to attest that the above-mentioned JO has satisfactorily rendered the services indicated herein and is being submitted to the Human Resource Department for reference in the processing of remuneration covering the payroll period ", LEFT, y, { width: WIDTH, indent: 36, lineGap: 5, continued: true });
+  doc.text(`${certificationPeriodLabel(period)}.`, { underline: true });
 
   const signatureY = Math.min(690, Math.max(535, y + 75));
-  doc.font(BOLD).fontSize(10.5).text((profile.certifyingOfficerName || "CERTIFYING OFFICER").toUpperCase(), LEFT, signatureY, { width: WIDTH, align: "center" });
-  doc.font(REGULAR).text(profile.certifyingOfficerPosition || "Certifying Officer Position", LEFT, signatureY + 16, { width: WIDTH, align: "center" });
+  doc.font(BOLD).fontSize(12).text((profile.certifyingOfficerName || "CERTIFYING OFFICER").toUpperCase(), LEFT, signatureY, { width: WIDTH, align: "center" });
+  const position = profile.certifyingOfficerPosition || "Certifying Officer Position";
+  const [firstLine, ...remaining] = position.split(/,\s*/);
+  doc.font(REGULAR).fontSize(12).text(`${firstLine}${remaining.length ? "," : ""}`, LEFT, signatureY + 15, { width: WIDTH, align: "center" });
+  if (remaining.length) doc.text(remaining.join(", "), LEFT, signatureY + 29, { width: WIDTH, align: "center" });
 
   if (existsSync(ISO_LOGO)) doc.image(ISO_LOGO, 52, 755, { width: 58, height: 61 });
   doc.end();
