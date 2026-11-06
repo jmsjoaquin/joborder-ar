@@ -1,0 +1,63 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model EmployeeProfile {
+  id                       Int      @id @default(1)
+  fullName                 String
+  position                 String
+  department               String
+  workweekType             String   @default("NORMAL")
+  approvingOfficerName     String?
+  approvingOfficerPosition String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+}
+
+model Report {
+  id               String      @id @default(cuid())
+  periodStart      DateTime
+  periodEnd        DateTime
+  status           String      @default("NOT_STARTED")
+  generatedPdfPath String?
+  generatedAt      DateTime?
+  days             ReportDay[]
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@unique([periodStart, periodEnd])
+  @@index([periodStart])
+}
+
+model ReportDay {
+  id                   String   @id @default(cuid())
+  reportId             String
+  date                 DateTime
+  dayStatus            String
+  target               String   @default("")
+  output               String   @default("")
+  taskStatus           String   @default("COMPLETED")
+  completionPercentage Int      @default(100)
+  sortOrder            Int
+  report               Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([reportId, date])
+  @@index([reportId, sortOrder])
+}
+
+model SavedTarget {
+  id         String   @id @default(cuid())
+  name       String
+  targetText String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([name])
+}

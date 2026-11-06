@@ -1,0 +1,1 @@
+ALTER TABLE "EmployeeProfile" ADD COLUMN "workweekType" TEXT NOT NULL DEFAULT 'NORMAL';
