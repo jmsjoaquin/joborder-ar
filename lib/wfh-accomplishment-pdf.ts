@@ -92,15 +92,15 @@ function drawFooter(doc: PDFKit.PDFDocument, profile: WfhPdfProfile, y: number) 
   doc.font(REGULAR).fontSize(11).text("I hereby certify that the foregoing accomplishments declared in this report are true and correct to the best of my knowledge and belief. This report is open for validation and audit by the proper authority in the Corporation.", LEFT, y, { width: WIDTH, align: "justify" });
   y += 56;
   doc.moveTo(198, y).lineTo(397, y).stroke();
-  doc.font(BOLD).fontSize(9).text(profile.fullName.toUpperCase(), 198, y + 3, { width: 199, align: "center" });
-  doc.font(REGULAR).text(profile.position, 198, y + 16, { width: 199, align: "center" });
-  doc.text("Date Prepared: __________________", 204, y + 42, { width: 190, align: "center" });
-  doc.font(BOLD).text("APPROVED BY", LEFT, y + 72, { width: WIDTH, align: "center" });
-  const approverY = y + 115;
+  doc.font(BOLD).fontSize(11).text(profile.fullName.toUpperCase(), 180, y + 3, { width: 235, align: "center" });
+  doc.font(REGULAR).fontSize(11).text(profile.position, 180, y + 18, { width: 235, align: "center" });
+  doc.text("Date Prepared: __________________", 190, y + 45, { width: 215, align: "center" });
+  doc.font(BOLD).fontSize(11).text("APPROVED BY", LEFT, y + 75, { width: WIDTH, align: "center" });
+  const approverY = y + 120;
   doc.moveTo(180, approverY).lineTo(415, approverY).stroke();
-  doc.text((profile.wfhApproverName || "WFH APPROVER").toUpperCase(), 180, approverY + 3, { width: 235, align: "center" });
-  doc.font(REGULAR).text((profile.wfhApproverPosition || "WFH APPROVER POSITION").toUpperCase(), 170, approverY + 16, { width: 255, align: "center" });
-  doc.text("Date Signed: __________________", 190, approverY + 34, { width: 215, align: "center" });
+  doc.font(BOLD).fontSize(11).text((profile.wfhApproverName || "WFH APPROVER").toUpperCase(), 170, approverY + 3, { width: 255, align: "center" });
+  doc.font(REGULAR).fontSize(11).text((profile.wfhApproverPosition || "WFH APPROVER POSITION").toUpperCase(), 160, approverY + 18, { width: 275, align: "center" });
+  doc.text("Date Signed: __________________", 180, approverY + 38, { width: 235, align: "center" });
 }
 
 export async function generateWfhAccomplishmentPdf(profile: WfhPdfProfile, day: WfhPdfDay) {
@@ -154,7 +154,7 @@ export async function generateWfhAccomplishmentPdf(profile: WfhPdfProfile, day: 
     pageRowsHeight += row.height;
   }
   if (pageRows.length) y = drawPageRows(pageRows, y);
-  if (y + 305 > PAGE_HEIGHT - 20) y = startPage(doc, profile, day, true);
+  if (y + 315 > PAGE_HEIGHT - 20) y = startPage(doc, profile, day, true);
   drawFooter(doc, profile, y);
   const pages = doc.bufferedPageRange().count;
   for (let index = 0; index < pages; index += 1) { doc.switchToPage(index); doc.font(REGULAR).fontSize(7).text(`Page ${index + 1} of ${pages}`, 490, 810, { width: 60, align: "right" }); }
