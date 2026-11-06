@@ -53,19 +53,18 @@ export async function generateServicesCertificationPdf(profile: CertificationPro
   doc.fillColor("#000").font(BOLD).fontSize(14).text("CERTIFICATION OF SERVICES RENDERED", LEFT, 149, { width: WIDTH, align: "center" });
 
   doc.fillColor("#000").font(REGULAR).fontSize(12).text("This is to certify ", 90, 192, { continued: true });
-  doc.font(BOLD).text(profile.fullName.toUpperCase(), { continued: true, underline: true });
-  doc.font(REGULAR).text(", ", { continued: true });
-  doc.font(BOLD).text(profile.position, { underline: true });
-  doc.font(REGULAR).text("assigned at the ", LEFT, 213, { continued: true });
-  doc.text(profile.fullDepartmentName, { continued: true, underline: true });
-  doc.font(REGULAR).text(" have rendered services on", { underline: false });
-  doc.text("the following date(s):", LEFT, 233);
+  doc.font(BOLD).text(`${profile.fullName.toUpperCase()},`, { underline: true });
+  doc.font(BOLD).text(profile.position, LEFT, 213, { continued: true, underline: true });
+  doc.font(REGULAR).text(" assigned at the", { underline: false });
+  doc.font(REGULAR).text(profile.fullDepartmentName, LEFT, 233, { underline: true });
+  doc.font(REGULAR).text("have rendered services on", LEFT, 253);
+  doc.text("the following date(s):", LEFT, 273);
 
   const tableWidth = 398;
   const tableLeft = (595.28 - tableWidth) / 2;
   const dateWidth = 232;
   const rowHeight = services.length > 10 ? 20 : 25;
-  let y = 272;
+  let y = services.length > 10 ? 282 : 302;
   box(doc, tableLeft, y, dateWidth, 28, "#f2f2f2"); box(doc, tableLeft + dateWidth, y, tableWidth - dateWidth, 28, "#f2f2f2");
   doc.font(BOLD).fontSize(12).fillColor("#000").text("Date", tableLeft, y + 7, { width: dateWidth, align: "center" });
   doc.text("No. of Hours", tableLeft + dateWidth, y + 8, { width: tableWidth - dateWidth, align: "center" });
