@@ -1,7 +1,7 @@
 import PDFDocument from "pdfkit";
 import path from "node:path";
 import { existsSync } from "node:fs";
-import { formatWorkDate } from "@/lib/dates";
+import { formatWorkDate } from "./dates";
 
 export type WfhPdfProfile = {
   fullName: string;
@@ -23,6 +23,19 @@ const PAGE_HEIGHT = 841.89;
 const LEFT = 54;
 const WIDTH = 496;
 const COLS = [85, 122, 163, 126] as const;
+
+export function groupPerspectiveRows(rows: { perspective: string; height: number }[]) {
+  return rows.reduce<Array<{ perspective: string; startIndex: number; rowCount: number; height: number }>>((groups, row, index) => {
+    const current = groups.at(-1);
+    if (current?.perspective === row.perspective) {
+      current.rowCount += 1;
+      current.height += row.height;
+    } else {
+      groups.push({ perspective: row.perspective, startIndex: index, rowCount: 1, height: row.height });
+    }
+    return groups;
+  }, []);
+}
 
 function timeLabel(value: string) {
   const [hours, minutes] = value.split(":").map(Number);
@@ -97,16 +110,48 @@ export async function generateWfhAccomplishmentPdf(profile: WfhPdfProfile, day: 
   const completed = new Promise<Buffer>((resolve, reject) => { doc.on("end", () => resolve(Buffer.concat(chunks))); doc.on("error", reject); });
   let y = startPage(doc, profile, day);
   const MAX_ROW_HEIGHT = 400;
-  for (const task of day.tasks) {
+  const measuredRows = day.tasks.map((task) => {
     doc.font(REGULAR).fontSize(9);
     const heights = [task.perspective, task.target, task.accomplished, task.notes].map((text, index) => doc.heightOfString(text || " ", { width: COLS[index] - 8, lineGap: 1 }));
     const height = Math.max(30, ...heights.map((value) => value + 10));
     if (height > MAX_ROW_HEIGHT) throw new Error("A WFH task is too long for the official form. Split it into smaller task rows.");
-    if (y + height > 650) y = startPage(doc, profile, day, true);
-    let x = LEFT;
-    [task.perspective, task.target, task.accomplished, task.notes].forEach((text, index) => { box(doc, x, y, COLS[index], height); doc.text(text, x + 4, y + 5, { width: COLS[index] - 8, lineGap: 1 }); x += COLS[index]; });
-    y += height;
+    return { task, perspective: task.perspective, height };
+  });
+
+  function drawPageRows(rows: typeof measuredRows, startY: number) {
+    const groups = groupPerspectiveRows(rows);
+    let groupY = startY;
+    for (const group of groups) {
+      box(doc, LEFT, groupY, COLS[0], group.height);
+      doc.font(REGULAR).fontSize(9).text(group.perspective, LEFT + 4, groupY + 5, { width: COLS[0] - 8, lineGap: 1 });
+      let rowY = groupY;
+      for (const row of rows.slice(group.startIndex, group.startIndex + group.rowCount)) {
+        let x = LEFT + COLS[0];
+        [row.task.target, row.task.accomplished, row.task.notes].forEach((text, index) => {
+          box(doc, x, rowY, COLS[index + 1], row.height);
+          doc.text(text, x + 4, rowY + 5, { width: COLS[index + 1] - 8, lineGap: 1 });
+          x += COLS[index + 1];
+        });
+        rowY += row.height;
+      }
+      groupY += group.height;
+    }
+    return groupY;
   }
+
+  let pageRows: typeof measuredRows = [];
+  let pageRowsHeight = 0;
+  for (const row of measuredRows) {
+    if (pageRows.length && y + pageRowsHeight + row.height > 650) {
+      y = drawPageRows(pageRows, y);
+      y = startPage(doc, profile, day, true);
+      pageRows = [];
+      pageRowsHeight = 0;
+    }
+    pageRows.push(row);
+    pageRowsHeight += row.height;
+  }
+  if (pageRows.length) y = drawPageRows(pageRows, y);
   if (y + 290 > PAGE_HEIGHT - 20) y = startPage(doc, profile, day, true);
   drawFooter(doc, profile, y);
   const pages = doc.bufferedPageRange().count;
