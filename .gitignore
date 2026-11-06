@@ -12,3 +12,11 @@ generated-reports/*
 !generated-reports/.gitkeep
 *.tsbuildinfo
 npm-debug.log*
+
+# Local AI-agent instructions and private working plans
+AGENTS.md
+CLAUDE.md
+IMPLEMENTATION_PLAN.md
+.agents/
+.claude/
+.codex/
