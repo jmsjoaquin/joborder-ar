@@ -27,6 +27,13 @@ function formatDate(date: Date) {
   return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
 
+export function formatPositionLabel(position: string) {
+  return position.trim().split(/\s+/).map((word) => {
+    if (/^[IVXLCDM]+$/i.test(word)) return word.toUpperCase();
+    return `${word.charAt(0).toUpperCase()}${word.slice(1).toLowerCase()}`;
+  }).join(" ");
+}
+
 export function certificationPeriodLabel(period: ReportingPeriod) {
   const month = period.start.toLocaleDateString("en-US", { month: "long", timeZone: "UTC" });
   if (period.start.getUTCMonth() === period.end.getUTCMonth() && period.start.getUTCFullYear() === period.end.getUTCFullYear()) {
@@ -52,35 +59,35 @@ export async function generateServicesCertificationPdf(profile: CertificationPro
   doc.image(LETTERHEAD, 45, 32, { width: 540, height: 73 });
   doc.fillColor("#000").font(BOLD).fontSize(14).text("CERTIFICATION OF SERVICES RENDERED", LEFT, 149, { width: WIDTH, align: "center" });
 
-  doc.fillColor("#000").font(REGULAR).fontSize(12).text("This is to certify ", 90, 192, { continued: true });
-  doc.font(BOLD).text(`${profile.fullName.toUpperCase()},`, { underline: true });
-  doc.font(BOLD).text(profile.position, LEFT, 213, { continued: true, underline: true });
-  doc.font(REGULAR).text(" assigned at the", { underline: false });
-  doc.font(REGULAR).text(profile.fullDepartmentName, LEFT, 233, { underline: true });
-  doc.font(REGULAR).text("have rendered services on", LEFT, 253);
-  doc.text("the following date(s):", LEFT, 273);
+  doc.fillColor("#000").font(REGULAR).fontSize(12).text("This is to certify ", LEFT, 192, { width: WIDTH, indent: 36, lineGap: 4, continued: true });
+  doc.font(BOLD).text(profile.fullName.toUpperCase(), { underline: true, continued: true });
+  doc.font(REGULAR).text(", ", { underline: false, continued: true });
+  doc.font(BOLD).fontSize(11).text(formatPositionLabel(profile.position), { underline: true, continued: true });
+  doc.font(REGULAR).fontSize(12).text(", assigned at the ", { underline: false, continued: true });
+  doc.text(profile.fullDepartmentName, { underline: true, continued: true });
+  doc.text(", has rendered services on the following date(s):", { underline: false });
 
   const tableWidth = 398;
   const tableLeft = (595.28 - tableWidth) / 2;
   const dateWidth = 232;
-  const rowHeight = services.length > 10 ? 20 : 25;
-  let y = services.length > 10 ? 282 : 302;
+  const rowHeight = services.length > 10 ? 18 : 25;
+  let y = Math.max(286, doc.y + 18);
   box(doc, tableLeft, y, dateWidth, 28, "#f2f2f2"); box(doc, tableLeft + dateWidth, y, tableWidth - dateWidth, 28, "#f2f2f2");
   doc.font(BOLD).fontSize(12).fillColor("#000").text("Date", tableLeft, y + 7, { width: dateWidth, align: "center" });
   doc.text("No. of Hours", tableLeft + dateWidth, y + 8, { width: tableWidth - dateWidth, align: "center" });
   y += 28;
   for (const service of services) {
     box(doc, tableLeft, y, dateWidth, rowHeight); box(doc, tableLeft + dateWidth, y, tableWidth - dateWidth, rowHeight);
-    doc.font(REGULAR).fontSize(services.length > 10 ? 9.5 : 12).text(formatDate(service.date), tableLeft, y + (services.length > 10 ? 5 : 6), { width: dateWidth, align: "center" });
-    doc.text(formatHours(service.hours), tableLeft + dateWidth, y + (services.length > 10 ? 5 : 7), { width: tableWidth - dateWidth, align: "center" });
+    doc.font(REGULAR).fontSize(services.length > 10 ? 9 : 12).text(formatDate(service.date), tableLeft, y + (services.length > 10 ? 4 : 6), { width: dateWidth, align: "center" });
+    doc.text(formatHours(service.hours), tableLeft + dateWidth, y + (services.length > 10 ? 4 : 7), { width: tableWidth - dateWidth, align: "center" });
     y += rowHeight;
   }
 
   y += 22;
-  doc.font(REGULAR).fontSize(12).text("This certification is issued to attest that the above-mentioned JO has satisfactorily rendered the services indicated herein and is being submitted to the Human Resource Department for reference in the processing of remuneration covering the payroll period ", LEFT, y, { width: WIDTH, indent: 36, lineGap: 5, continued: true });
-  doc.text(`${certificationPeriodLabel(period)}.`, { underline: true });
+  doc.font(REGULAR).fontSize(12).text("This certification is issued to attest that the above-mentioned JO has satisfactorily rendered the services indicated herein and is being submitted to the Human Resource Department for reference in the processing of remuneration covering the payroll period ", LEFT, y, { width: WIDTH, indent: 36, lineGap: 4, continued: true });
+  doc.text(`${certificationPeriodLabel(period)}.`, { underline: true, continued: false });
 
-  const signatureY = Math.min(690, Math.max(535, y + 75));
+  const signatureY = Math.min(720, Math.max(590, doc.y + 58));
   doc.font(BOLD).fontSize(12).text((profile.certifyingOfficerName || "CERTIFYING OFFICER").toUpperCase(), LEFT, signatureY, { width: WIDTH, align: "center" });
   const position = profile.certifyingOfficerPosition || "Certifying Officer Position";
   const [firstLine, ...remaining] = position.split(/,\s*/);

@@ -1,7 +1,7 @@
 import PDFDocument from "pdfkit";
 import { existsSync } from "node:fs";
 import { formatWorkDate, type ReportingPeriod } from "@/lib/dates";
-import { outputAsBulletedList, outputHeadingFromTarget } from "@/lib/report-format";
+import { outputAsBulletedList } from "@/lib/report-format";
 import { humanizeEnum } from "@/lib/utils";
 
 type ReportUser = {
@@ -92,10 +92,9 @@ function rowHeight(doc: PDFKit.PDFDocument, entry: ReportEntry) {
   if (!entry.showStatus && entry.target === "Work From Home") return 10;
   const formattedOutput = outputAsBulletedList(entry.output);
   const targetHeight = doc.font(BOLD_FONT).fontSize(FONT_SIZE).heightOfString(entry.target, { width: COLUMNS[1] - 5 });
-  const headingHeight = entry.showStatus && entry.target.trim() ? doc.font(BOLD_FONT).fontSize(FONT_SIZE).heightOfString(outputHeadingFromTarget(entry.target), { width: COLUMNS[2] - 5, lineGap: 0.5 }) : 0;
   const outputHeight = doc.font(REGULAR_FONT).fontSize(FONT_SIZE).heightOfString(formattedOutput, { width: COLUMNS[2] - 5, lineGap: 0.5 });
   const statusHeight = entry.showStatus ? doc.font(BOLD_FONT).heightOfString(`Status: ${humanizeEnum(entry.status)} ${entry.completionPercentage}%`, { width: COLUMNS[2] - 5 }) : 0;
-  return Math.max(48, targetHeight + 7, headingHeight + outputHeight + statusHeight + 9);
+  return Math.max(48, targetHeight + 7, outputHeight + statusHeight + 9);
 }
 
 function drawEntryRow(doc: PDFKit.PDFDocument, entry: ReportEntry, y: number, height: number) {
@@ -112,10 +111,7 @@ function drawEntryRow(doc: PDFKit.PDFDocument, entry: ReportEntry, y: number, he
   doc.fillColor("#000000").font(REGULAR_FONT).fontSize(FONT_SIZE).text(formatWorkDate(entry.date), LEFT + 2, y + 3, { width: COLUMNS[0] - 4, align: "center" });
   doc.font(BOLD_FONT).text(entry.target, LEFT + COLUMNS[0] + 2, y + 3, { width: COLUMNS[1] - 4, lineGap: 0.5, align: entry.showStatus ? "left" : "center" });
   const outputX = LEFT + COLUMNS[0] + COLUMNS[1] + 2;
-  const heading = entry.showStatus && entry.target.trim() ? outputHeadingFromTarget(entry.target) : "";
-  if (heading) doc.font(BOLD_FONT).text(heading, outputX, y + 3, { width: COLUMNS[2] - 4, lineGap: 0.5 });
-  const headingHeight = heading ? doc.heightOfString(heading, { width: COLUMNS[2] - 4, lineGap: 0.5 }) : 0;
-  const outputY = y + 3 + headingHeight;
+  const outputY = y + 3;
   const formattedOutput = outputAsBulletedList(entry.output);
   doc.font(REGULAR_FONT).text(formattedOutput, outputX, outputY, { width: COLUMNS[2] - 4, lineGap: 0.5 });
   const outputHeight = doc.heightOfString(formattedOutput, { width: COLUMNS[2] - 4, lineGap: 0.5 });
