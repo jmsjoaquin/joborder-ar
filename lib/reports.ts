@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { dateKey, datesInPeriod, defaultDayStatus, getReportingPeriod, type ReportingPeriod } from "@/lib/dates";
+import { dateKey, datesInPeriod, getReportingPeriod, type ReportingPeriod } from "@/lib/dates";
 import { isRequiredWorkday, type ReportStatus, type WorkweekType } from "@/lib/report-types";
+import { automaticDayStatus } from "@/lib/wfh-rules";
 
 export async function ensureProfile() {
   return prisma.employeeProfile.upsert({
@@ -11,6 +12,12 @@ export async function ensureProfile() {
       fullName: "JAMES MATTHEW B. JOAQUIN",
       position: "COMPUTER PROGRAMMER III",
       department: "PMT-ISM",
+      officeShortName: "PMT-ISM, ITMD",
+      fullDepartmentName: "Information Technology Management Department",
+      certifyingOfficerName: "ALLAN M. DE VILLA",
+      certifyingOfficerPosition: "Acting Senior Manager, Information Technology Management Department",
+      wfhApproverName: "MARCO PAOLO Z. NATIVIDAD",
+      wfhApproverPosition: "INFORMATION SYSTEM ANALYST II, ITMD",
       approvingOfficerName: "ALLAN M. DE VILLA",
       approvingOfficerPosition: "ACTING SENIOR MANAGER - ITMD",
     },
@@ -32,7 +39,24 @@ export async function ensureReport(period: ReportingPeriod) {
     .map((date, sortOrder) => ({ date, sortOrder }))
     .filter(({ date }) => !existingKeys.has(dateKey(date)));
   if (missing.length) {
-    await prisma.reportDay.createMany({ data: missing.map(({ date, sortOrder }) => ({ reportId: report.id, date, sortOrder, dayStatus: defaultDayStatus(date, profile.workweekType as WorkweekType), taskStatus: "COMPLETED", completionPercentage: 100 })) });
+    const workweekType = profile.workweekType as WorkweekType;
+    const wfhSettings = { enabled: profile.defaultWfhEnabled, weekday: profile.defaultWfhWeekday };
+    await prisma.reportDay.createMany({
+      data: missing.map(({ date, sortOrder }) => {
+        const dayStatus = automaticDayStatus(date, workweekType, wfhSettings);
+        return {
+          reportId: report.id,
+          date,
+          sortOrder,
+          dayStatus,
+          taskStatus: "COMPLETED",
+          completionPercentage: 100,
+          wfhHours: dayStatus === "WFH" ? profile.defaultWfhHours : null,
+          wfhStartTime: dayStatus === "WFH" ? profile.defaultWfhStartTime : null,
+          wfhEndTime: dayStatus === "WFH" ? profile.defaultWfhEndTime : null,
+        };
+      }),
+    });
   }
   return prisma.report.findUniqueOrThrow({ where: { id: report.id }, include: { days: { orderBy: { sortOrder: "asc" } } } });
 }

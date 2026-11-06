@@ -22,12 +22,15 @@ export async function saveReportDay(input: z.infer<typeof dayUpdateSchema>) {
   const day = await prisma.reportDay.findFirst({ where: { id: parsed.data.dayId, reportId: parsed.data.reportId } });
   if (!day) return { ok: false, message: "Report date not found." };
   try {
-    await prisma.reportDay.update({ where: { id: day.id }, data: {
-      target: parsed.data.target,
-      output: parsed.data.output,
-      taskStatus: parsed.data.taskStatus,
-      completionPercentage: parsed.data.completionPercentage,
-    } });
+    await prisma.$transaction([
+      prisma.reportDay.update({ where: { id: day.id }, data: {
+        target: parsed.data.target,
+        output: parsed.data.output,
+        taskStatus: parsed.data.taskStatus,
+        completionPercentage: parsed.data.completionPercentage,
+      } }),
+      prisma.wfhTask.deleteMany({ where: { reportDayId: day.id } }),
+    ]);
     await refreshReportStatus(input.reportId);
     revalidatePath(`/reports/${input.reportId}`); revalidatePath("/reports");
     return { ok: true, savedAt: Date.now() };
@@ -51,10 +54,13 @@ export async function importAccomplishmentReport(input: { reportId: string; cont
   });
   if (!matched.length) return { ok: false as const, message: "The pasted dates do not belong to this reporting period." };
 
-  await prisma.$transaction(matched.map(({ day, entry }) => prisma.reportDay.update({
-    where: { id: day.id },
-    data: { target: entry.target, output: entry.output, taskStatus: "COMPLETED", completionPercentage: 100 },
-  })));
+  await prisma.$transaction(async (tx) => {
+    await Promise.all(matched.map(({ day, entry }) => tx.reportDay.update({
+      where: { id: day.id },
+      data: { target: entry.target, output: entry.output, taskStatus: "COMPLETED", completionPercentage: 100 },
+    })));
+    await tx.wfhTask.deleteMany({ where: { reportDayId: { in: matched.map(({ day }) => day.id) } } });
+  });
   await refreshReportStatus(parsed.data.reportId);
   revalidatePath(`/reports/${parsed.data.reportId}`);
   revalidatePath("/reports");
@@ -79,7 +85,13 @@ export async function setDayStatus(input: { reportId: string; dayIds: string[]; 
 export async function assignBulkTarget(input: { reportId: string; dayIds: string[]; target: string }) {
   const parsed = z.object({ reportId: z.string().min(1), dayIds: z.array(z.string()).min(1), target: z.string().trim().min(1).max(5000) }).safeParse(input);
   if (!parsed.success) return { ok: false, message: "Select dates and enter a target." };
-  await prisma.reportDay.updateMany({ where: { reportId: parsed.data.reportId, id: { in: parsed.data.dayIds } }, data: { target: parsed.data.target } });
+  const selectedDays = await prisma.reportDay.findMany({ where: { reportId: parsed.data.reportId, id: { in: parsed.data.dayIds } }, select: { id: true } });
+  const selectedIds = selectedDays.map((day) => day.id);
+  if (!selectedIds.length) return { ok: false, message: "No matching dates were found in this report." };
+  await prisma.$transaction([
+    prisma.reportDay.updateMany({ where: { reportId: parsed.data.reportId, id: { in: selectedIds } }, data: { target: parsed.data.target } }),
+    prisma.wfhTask.deleteMany({ where: { reportDayId: { in: selectedIds } } }),
+  ]);
   await refreshReportStatus(parsed.data.reportId);
   revalidatePath(`/reports/${parsed.data.reportId}`); revalidatePath("/reports");
   return { ok: true };
@@ -107,7 +119,10 @@ export async function copyTargetsFromPrevious(input: { reportId: string; dayIds:
   const selected = new Set(input.dayIds);
   const copied = currentWorkdays.flatMap((day, index) => selected.has(day.id) && previousWorkdays[index]?.target ? [{ id: day.id, target: previousWorkdays[index].target }] : []);
   if (!copied.length) return { ok: false, message: "No matching previous targets were found for the selected dates." };
-  await prisma.$transaction(copied.map((item) => prisma.reportDay.update({ where: { id: item.id }, data: { target: item.target } })));
+  await prisma.$transaction(async (tx) => {
+    await Promise.all(copied.map((item) => tx.reportDay.update({ where: { id: item.id }, data: { target: item.target } })));
+    await tx.wfhTask.deleteMany({ where: { reportDayId: { in: copied.map((item) => item.id) } } });
+  });
   await refreshReportStatus(input.reportId);
   revalidatePath(`/reports/${input.reportId}`); revalidatePath("/reports");
   return { ok: true, copied };

@@ -8,15 +8,27 @@ datasource db {
 }
 
 model EmployeeProfile {
-  id                       Int      @id @default(1)
-  fullName                 String
-  position                 String
-  department               String
-  workweekType             String   @default("NORMAL")
-  approvingOfficerName     String?
-  approvingOfficerPosition String?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  id                        Int      @id @default(1)
+  fullName                  String
+  position                  String
+  department                String
+  workweekType              String   @default("NORMAL")
+  officeShortName           String   @default("PMT-ISM, ITMD")
+  fullDepartmentName        String   @default("Information Technology Management Department")
+  defaultWfhEnabled         Boolean  @default(true)
+  defaultWfhWeekday         Int      @default(5)
+  defaultWfhHours           Float    @default(8)
+  defaultWfhStartTime       String   @default("08:00")
+  defaultWfhEndTime         String   @default("17:00")
+  defaultBscPerspective     String   @default("Excellent Process")
+  certifyingOfficerName     String?
+  certifyingOfficerPosition String?
+  wfhApproverName           String?  @default("MARCO PAOLO Z. NATIVIDAD")
+  wfhApproverPosition       String?  @default("INFORMATION SYSTEM ANALYST II, ITMD")
+  approvingOfficerName      String?
+  approvingOfficerPosition  String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
 }
 
 model Report {
@@ -35,21 +47,41 @@ model Report {
 }
 
 model ReportDay {
-  id                   String   @id @default(cuid())
-  reportId             String
-  date                 DateTime
-  dayStatus            String
-  target               String   @default("")
-  output               String   @default("")
-  taskStatus           String   @default("COMPLETED")
-  completionPercentage Int      @default(100)
-  sortOrder            Int
-  report               Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id                            String    @id @default(cuid())
+  reportId                      String
+  date                          DateTime
+  dayStatus                     String
+  target                        String    @default("")
+  output                        String    @default("")
+  taskStatus                    String    @default("COMPLETED")
+  completionPercentage          Int       @default(100)
+  sortOrder                     Int
+  wfhHours                      Float?
+  wfhStartTime                  String?
+  wfhEndTime                    String?
+  includeInServiceCertification Boolean   @default(true)
+  wfhTasks                      WfhTask[]
+  report                        Report    @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  createdAt                     DateTime  @default(now())
+  updatedAt                     DateTime  @updatedAt
 
   @@unique([reportId, date])
   @@index([reportId, sortOrder])
+}
+
+model WfhTask {
+  id           String    @id @default(cuid())
+  reportDayId  String
+  perspective  String    @default("Excellent Process")
+  target       String
+  accomplished String
+  notes        String    @default("")
+  sortOrder    Int
+  reportDay    ReportDay @relation(fields: [reportDayId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([reportDayId, sortOrder])
 }
 
 model SavedTarget {
