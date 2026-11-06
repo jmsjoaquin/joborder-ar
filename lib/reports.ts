@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { dateKey, datesInPeriod, getReportingPeriod, type ReportingPeriod } from "@/lib/dates";
 import { isRequiredWorkday, type ReportStatus, type WorkweekType } from "@/lib/report-types";
-import { automaticDayStatus } from "@/lib/wfh-rules";
+import { automaticDayStatus, shouldApplyAutomaticWfh } from "@/lib/wfh-rules";
 
 export async function ensureProfile() {
   return prisma.employeeProfile.upsert({
@@ -33,14 +33,21 @@ export async function ensureReport(period: ReportingPeriod) {
     }),
     ensureProfile(),
   ]);
-  const existing = await prisma.reportDay.findMany({ where: { reportId: report.id }, select: { date: true } });
+  const existing = await prisma.reportDay.findMany({ where: { reportId: report.id }, select: { id: true, date: true, dayStatus: true, target: true, output: true } });
   const existingKeys = new Set(existing.map((day) => dateKey(day.date)));
+  const workweekType = profile.workweekType as WorkweekType;
+  const wfhSettings = { enabled: profile.defaultWfhEnabled, weekday: profile.defaultWfhWeekday };
+  const existingWfhIds = existing.filter((day) => shouldApplyAutomaticWfh(day, wfhSettings)).map((day) => day.id);
+  if (existingWfhIds.length) {
+    await prisma.reportDay.updateMany({
+      where: { id: { in: existingWfhIds } },
+      data: { dayStatus: "WFH", wfhHours: profile.defaultWfhHours, wfhStartTime: profile.defaultWfhStartTime, wfhEndTime: profile.defaultWfhEndTime },
+    });
+  }
   const missing = datesInPeriod(period)
     .map((date, sortOrder) => ({ date, sortOrder }))
     .filter(({ date }) => !existingKeys.has(dateKey(date)));
   if (missing.length) {
-    const workweekType = profile.workweekType as WorkweekType;
-    const wfhSettings = { enabled: profile.defaultWfhEnabled, weekday: profile.defaultWfhWeekday };
     await prisma.reportDay.createMany({
       data: missing.map(({ date, sortOrder }) => {
         const dayStatus = automaticDayStatus(date, workweekType, wfhSettings);

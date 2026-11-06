@@ -10,6 +10,14 @@ export function automaticDayStatus(date: Date, workweekType: WorkweekType, setti
   return defaultDayStatus(date, workweekType);
 }
 
+export function shouldApplyAutomaticWfh(day: { date: Date; dayStatus: string; target: string; output: string }, settings: AutomaticWfhSettings) {
+  return settings.enabled
+    && day.date.getUTCDay() === settings.weekday
+    && (day.dayStatus === "WORKING" || day.dayStatus === "WEEKEND")
+    && !day.target.trim()
+    && !day.output.trim();
+}
+
 export function isCertificationEligible(day: {
   dayStatus: string;
   includeInServiceCertification: boolean;
